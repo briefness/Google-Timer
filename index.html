@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>goog::hackathon::timer::v2</title>
+    <style>
+        :root {
+            /* Google 标准色彩：回归硬核高饱和纯色 */
+            --g-blue: #4285F4;
+            --g-red: #EA4335;
+            --g-yellow: #FBBC05;
+            --g-green: #34A853;
+            --panel-bg: #0A0A0C;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #020203;
+            font-family: 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
+            color: #777;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ================= 【新增】全屏贯穿式 Google 四色硬件总线，大幅强化四色权重 ================= */
+        .hardware-bus-bg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            padding: 5vh 0;
+            box-sizing: border-box;
+            pointer-events: none;
+            opacity: 0.8; /* 强显四色 */
+        }
+
+        .bus-line {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.02);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 导轨核心发光线与数据脉冲流（仅在倒计时进行时通过 JS 激活高速运动） */
+        .bus-line::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, var(--line-color) 50%, transparent);
+        }
+
+        /* 倒计时未开始时处于静止状态，开始后通过 class 激活跑马灯 */
+        .processing-active.bus-line::after {
+            animation: dataTransfer var(--speed) linear infinite;
+        }
+
+        .line-blue   { --line-color: var(--g-blue);   --speed: 2.5s; }
+        .line-red    { --line-color: var(--g-red);    --speed: 3.5s; }
+        .line-yellow { --line-color: var(--g-yellow); --speed: 2s; }
+        .line-green  { --line-color: var(--g-green);  --speed: 3s; }
+
+        @keyframes dataTransfer {
+            0% { left: -50%; }
+            100% { left: 100%; }
+        }
+
+        /* 极客隐性背景：右侧实时的系统事件日志流 */
+        #logConsole {
+            position: absolute;
+            left: 20px; top: 20px; bottom: 20px; width: 300px;
+            font-size: 11px; line-height: 1.5;
+            color: #222; overflow: hidden;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 核心中控台 */
+        .container {
+            position: relative;
+            z-index: 2;
+            width: 950px;
+            background: rgba(10, 10, 12, 0.95);
+            border: 2px solid #1A1A22;
+            padding: 40px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.9);
+            backdrop-filter: blur(10px);
+        }
+
+        /* 顶层元数据 */
+        .meta-header {
+            display: flex; justify-content: space-between;
+            font-size: 12px; color: #444;
+            border-bottom: 1px solid #16161D;
+            padding-bottom: 15px; margin-bottom: 40px;
+        }
+        .meta-header span { color: #666; }
+
+        /* ========= 核心创意：代码拼砌出来的巨型数字显示器 ========= */
+        .time-display-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            margin-bottom: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #020204;
+            border: 1px dashed #2C2C34;
+            overflow: hidden;
+        }
+
+        /* 实时在数字背后疯狂滚动的底层原始代码流 */
+        #codeStreamWall {
+            position: absolute;
+            width: 100%; height: 100%;
+            font-size: 11px; line-height: 1.2;
+            color: #0F0F14;
+            word-break: break-all;
+            white-space: pre-wrap;
+            z-index: 1;
+            user-select: none;
+        }
+
+        /* 浮动在最上层的时间：大幅增强四色对撞的高亮强度 */
+        .time-mask {
+            position: relative;
+            z-index: 2;
+            font-size: 160px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: transparent;
+            -webkit-text-stroke: 1px rgba(255, 255, 255, 0.05); 
+            background: linear-gradient(to right, var(--g-blue) 0%, var(--g-red) 33%, var(--g-yellow) 66%, var(--g-green) 100%);
+            background-size: 200% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: flowPattern 6s linear infinite; /* 加快流速，让四色更明显 */
+            filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.05));
+        }
+
+        /* 极客交互控制台按钮 */
+        .action-row {
+            display: flex; gap: 15px;
+        }
+
+        /* 【增强】按钮由隐性高亮变为显性极客高亮，红黄绿蓝属性一目了然 */
+        .cmd-btn {
+            flex: 1;
+            background: #07070A;
+            font-family: 'Fira Code', monospace;
+            padding: 16px; font-size: 13px; font-weight: bold;
+            cursor: pointer; text-align: left;
+            transition: all 0.15s ease;
+            border-radius: 0;
+        }
+
+        /* 显性绑定 Google 四色语法制导 */
+        .btn-5m   { border: 1px solid var(--g-blue);   color: var(--g-blue); }
+        .btn-3m   { border: 1px solid var(--g-yellow); color: var(--g-yellow); }
+        .btn-cust { border: 1px solid var(--g-green);  color: var(--g-green); }
+        .btn-reset{ border: 1px solid var(--g-red);    color: var(--g-red); }
+
+        .btn-5m:hover   { background: var(--g-blue);   color: #000; box-shadow: 0 0 15px rgba(66,133,244,0.4); }
+        .btn-3m:hover   { background: var(--g-yellow); color: #000; box-shadow: 0 0 15px rgba(251,188,5,0.4); }
+        .btn-cust:hover { background: var(--g-green);  color: #000; box-shadow: 0 0 15px rgba(52,168,83,0.4); }
+        .btn-reset:hover{ background: var(--g-red);    color: #000; box-shadow: 0 0 15px rgba(234,67,53,0.4); }
+
+        /* 主运行按钮 */
+        .btn-execute {
+            flex: 1.6;
+            background: #FFFFFF; color: #000000;
+            border: 1px solid #FFFFFF; text-align: center;
+        }
+        .btn-execute:hover {
+            background: transparent; color: #FFFFFF;
+            box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        }
+
+        /* 动画：数字内部代码色彩温和挪动 */
+        @keyframes flowPattern {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        /* ================= 倒计时结束：全屏总线崩溃暴走（Hardware Terminal Panic） ================= */
+        .terminal-panic {
+            background-color: #120101 !important;
+        }
+        .terminal-panic .bus-line::after {
+            background: var(--g-red) !important; /* 所有总线瞬间锁死充血红 */
+            animation-duration: 0.1s !important;
+        }
+        .terminal-panic .time-mask {
+            animation: shake 0.1s infinite !important;
+            -webkit-text-stroke: 1px var(--g-red);
+            background: var(--g-red);
+            -webkit-background-clip: text;
+            filter: drop-shadow(0 0 30px var(--g-red));
+        }
+        @keyframes shake {
+            0% { transform: translate(2px, -1px); }
+            50% { transform: translate(-1px, 2px); }
+            100% { transform: translate(2px, 2px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hardware-bus-bg">
+        <div id="busBlue" class="bus-line line-blue"></div>
+        <div id="busRed" class="bus-line line-red"></div>
+        <div id="busYellow" class="bus-line line-yellow"></div>
+        <div id="busGreen" class="bus-line line-green"></div>
+    </div>
+
+    <div id="logConsole"></div>
+
+    <div class="container">
+        <div class="meta-header">
+            <div>MODULE: <span style="color: var(--g-blue); font-weight: bold;">GOOG_CORE_BUS_TIMER</span> // STATUS: <span id="statusLabel" style="color: var(--g-green); font-weight: bold;">IDLE</span></div>
+            <div>[ KEY_BIND: SPACE TO EXECUTE ]</div>
+        </div>
+
+        <div class="time-display-container">
+            <div id="codeStreamWall"></div>
+            <div id="display" class="time-mask">05:00</div>
+        </div>
+
+        <div class="action-row">
+            <button class="cmd-btn btn-5m" onclick="setTime(300)">$ run_preset(--5min)</button>
+            <button class="cmd-btn btn-3m" onclick="setTime(180)">$ run_preset(--3min)</button>
+            <button class="cmd-btn btn-cust" onclick="setCustomTime()">$ set_env(--custom)</button>
+            <button class="cmd-btn btn-reset" onclick="resetTimer()">$ make_clean()</button>
+            <button id="startPauseBtn" class="cmd-btn btn-execute" onclick="toggleTimer()">$ execute_start()</button>
+        </div>
+    </div>
+
+    <audio id="alarmAudio" loop>
+        <source src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" type="audio/ogg">
+    </audio>
+
+    <script>
+        let totalSeconds = 300;
+        let remainingSeconds = 300;
+        let timerInterval = null;
+        let isRunning = false;
+
+        const display = document.getElementById('display');
+        const startPauseBtn = document.getElementById('startPauseBtn');
+        const statusLabel = document.getElementById('statusLabel');
+        const alarmAudio = document.getElementById('alarmAudio');
+        const logConsole = document.getElementById('logConsole');
+        const codeStreamWall = document.getElementById('codeStreamWall');
+
+        // 获取四色总线节点
+        const busLines = [
+            document.getElementById('busBlue'),
+            document.getElementById('busRed'),
+            document.getElementById('busYellow'),
+            document.getElementById('busGreen')
+        ];
+
+        const mockCodeSnippets = [
+            "import tensorflow as tf;", "const app = express();", "git commit -m 'fix: bug'", 
+            "kubectl get pods -n google", "flutter create goog_timer", "models.evaluate(x_test)",
+            "Map<String, dynamic> response", "status: 200 OK", "cluster_processing_active: true"
+        ];
+
+        // 初始化数字底纹
+        let sourceCodeText = "";
+        for(let i=0; i<2500; i++) {
+            sourceCodeText += Math.random().toString(36).substring(2, 7) + " ";
+        }
+        codeStreamWall.innerText = sourceCodeText;
+
+        let offset = 0;
+        setInterval(() => {
+            if (isRunning) {
+                offset += 2; // 加快数字内部数据流涌动速度
+                codeStreamWall.style.transform = `translateY(-${offset % 120}px)`;
+                
+                if (Math.random() > 0.85) {
+                    const logLine = `[${new Date().toLocaleTimeString()}] ${mockCodeSnippets[Math.floor(Math.random() * mockCodeSnippets.length)]}<br>`;
+                    logConsole.innerHTML = logLine + logConsole.innerHTML;
+                    if(logConsole.innerHTML.length > 1000) logConsole.innerHTML = logConsole.innerHTML.substring(0, 1000);
+                }
+            }
+        }, 30);
+
+        function updateDisplay() {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            display.innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function toggleTimer() { if (isRunning) { pauseTimer(); } else { startTimer(); } }
+
+        function startTimer() {
+            if (remainingSeconds <= 0) return;
+            isRunning = true;
+            statusLabel.innerText = "PROCESSING";
+            statusLabel.style.color = "var(--g-yellow)";
+            startPauseBtn.innerText = "$ terminate_process()";
+            
+            // 【激活】全屏四色光流信号
+            busLines.forEach(line => line.classList.add('processing-active'));
+
+            timerInterval = setInterval(() => {
+                remainingSeconds--;
+                updateDisplay();
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    triggerAlarm();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            statusLabel.innerText = "HALTED";
+            statusLabel.style.color = "var(--g-red)";
+            startPauseBtn.innerText = "$ execute_start()";
+            
+            // 【暂停】四色光流信号
+            busLines.forEach(line => line.classList.remove('processing-active'));
+            
+            clearInterval(timerInterval);
+        }
+
+        function setTime(seconds) {
+            stopAlarm(); pauseTimer();
+            totalSeconds = seconds; remainingSeconds = seconds;
+            updateDisplay();
+            statusLabel.innerText = "READY";
+            statusLabel.style.color = "var(--g-blue)";
+        }
+
+        function setCustomTime() {
+            stopAlarm(); pauseTimer();
+            const input = prompt(">> CONFIG_ENV_MINUTES:", "5");
+            if (input !== null) {
+                const minutes = parseFloat(input);
+                if (!isNaN(minutes) && minutes > 0) setTime(Math.round(minutes * 60));
+            }
+        }
+
+        function resetTimer() {
+            stopAlarm(); pauseTimer();
+            remainingSeconds = totalSeconds;
+            updateDisplay();
+            statusLabel.innerText = "IDLE";
+            statusLabel.style.color = "var(--g-green)";
+        }
+
+        function triggerAlarm() {
+            isRunning = false;
+            statusLabel.innerText = "COMPILE_ERROR";
+            statusLabel.style.color = "var(--g-red)";
+            startPauseBtn.innerText = "$ execute_start()";
+            alarmAudio.volume = 1.0;
+            alarmAudio.play().catch(e => console.log("Audio play blocked. Click anywhere first."));
+            document.body.classList.add('terminal-panic');
+        }
+
+        function stopAlarm() {
+            alarmAudio.pause(); alarmAudio.currentTime = 0;
+            document.body.classList.remove('terminal-panic');
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') { e.preventDefault(); toggleTimer(); }
+        });
+    </script>
+</body>
+</html>
