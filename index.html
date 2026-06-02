@@ -479,10 +479,12 @@
 
         function triggerAlarm() {
             isRunning = false;
-            statusLabel.innerText = "DONE";
-            statusLabel.style.color = "var(--g-green)";
+            statusLabel.innerText = "COMPILE_ERROR";
+            statusLabel.style.color = "var(--g-red)";
             startPauseBtn.innerText = "$ execute_start()";
-            busLines.forEach(line => line.classList.remove('processing-active'));
+            // 激活全屏 terminal-panic：背景变红 + 数字抖动 + 总线红色暴走
+            document.body.classList.add('terminal-panic');
+            busLines.forEach(line => line.classList.add('processing-active'));
             alarmAudio.volume = 1.0;
             alarmAudio.play().catch(e => console.log("Audio play blocked.", e));
         }
