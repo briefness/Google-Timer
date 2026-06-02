@@ -1,0 +1,44 @@
+{
+  "name": "hackathon-timer",
+  "version": "1.0.0",
+  "description": "Always-on-top Hackathon Timer (Google style)",
+  "main": "main.js",
+  "author": "Lucas",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "electron": "^42.3.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.lucas.hackathon-timer",
+    "productName": "Hackathon Timer",
+    "files": [
+      "main.js",
+      "index.html",
+      "music/**/*"
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "icon.png",
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}

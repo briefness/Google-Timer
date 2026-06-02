@@ -14,9 +14,16 @@
             --panel-bg: #0A0A0C;
         }
 
+        /* Electron 拖拽：按钮和输入区域不参与拖拽 */
+        .cmd-btn, input, button, .action-row {
+            -webkit-app-region: no-drag;
+        }
+
+
         body, html {
             margin: 0; padding: 0;
             width: 100%; height: 100%;
+            -webkit-app-region: drag;
             background-color: #020203;
             font-family: 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
             color: #777;
@@ -209,6 +216,90 @@
             50% { transform: translate(-1px, 2px); }
             100% { transform: translate(2px, 2px); }
         }
+
+        /* ================= 自定义 Modal（替代 Electron 不支持的 prompt） ================= */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            -webkit-app-region: no-drag;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--g-green);
+            padding: 32px 36px;
+            width: 380px;
+            box-shadow: 0 0 40px rgba(52, 168, 83, 0.15), 0 20px 60px rgba(0,0,0,0.8);
+        }
+        .modal-title {
+            font-size: 12px;
+            color: var(--g-green);
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .modal-input {
+            width: 100%;
+            background: #07070A;
+            border: 1px solid #2A2A34;
+            color: #E0E0E0;
+            font-family: 'Fira Code', 'JetBrains Mono', monospace;
+            font-size: 28px;
+            padding: 12px 16px;
+            box-sizing: border-box;
+            outline: none;
+            text-align: center;
+            letter-spacing: 2px;
+            transition: border-color 0.2s;
+        }
+        .modal-input:focus {
+            border-color: var(--g-green);
+            box-shadow: 0 0 10px rgba(52, 168, 83, 0.2);
+        }
+        .modal-hint {
+            font-size: 11px;
+            color: #444;
+            margin-top: 10px;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .modal-btn {
+            flex: 1;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            padding: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 0;
+            transition: all 0.15s ease;
+        }
+        .modal-btn-cancel {
+            background: #07070A;
+            border: 1px solid var(--g-red);
+            color: var(--g-red);
+        }
+        .modal-btn-cancel:hover {
+            background: var(--g-red);
+            color: #000;
+        }
+        .modal-btn-confirm {
+            background: #07070A;
+            border: 1px solid var(--g-green);
+            color: var(--g-green);
+        }
+        .modal-btn-confirm:hover {
+            background: var(--g-green);
+            color: #000;
+        }
     </style>
 </head>
 <body>
@@ -242,8 +333,21 @@
         </div>
     </div>
 
-    <audio id="alarmAudio" loop>
-        <source src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg" type="audio/ogg">
+    <!-- 自定义 Modal：替代 Electron 不支持的 prompt() -->
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">$ CONFIG_ENV &gt;&gt; SET_MINUTES</div>
+            <input id="modalInput" class="modal-input" type="number" min="0.1" step="0.5" value="5" />
+            <div class="modal-hint">// UNIT: MINUTES | ENTER TO CONFIRM | ESC TO ABORT</div>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal()">$ abort()</button>
+                <button class="modal-btn modal-btn-confirm" onclick="confirmModal()">$ confirm()</button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="alarmAudio">
+        <source src="music/Coldplay - Viva La Vida.mp3" type="audio/mpeg">
     </audio>
 
     <script>
@@ -344,11 +448,25 @@
 
         function setCustomTime() {
             stopAlarm(); pauseTimer();
-            const input = prompt(">> CONFIG_ENV_MINUTES:", "5");
-            if (input !== null) {
-                const minutes = parseFloat(input);
-                if (!isNaN(minutes) && minutes > 0) setTime(Math.round(minutes * 60));
+            const modal = document.getElementById('customModal');
+            const input = document.getElementById('modalInput');
+            modal.classList.add('active');
+            input.value = '5';
+            input.focus();
+            input.select();
+        }
+
+        function confirmModal() {
+            const input = document.getElementById('modalInput');
+            const minutes = parseFloat(input.value);
+            if (!isNaN(minutes) && minutes > 0) {
+                setTime(Math.round(minutes * 60));
             }
+            closeModal();
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.remove('active');
         }
 
         function resetTimer() {
@@ -361,12 +479,12 @@
 
         function triggerAlarm() {
             isRunning = false;
-            statusLabel.innerText = "COMPILE_ERROR";
-            statusLabel.style.color = "var(--g-red)";
+            statusLabel.innerText = "DONE";
+            statusLabel.style.color = "var(--g-green)";
             startPauseBtn.innerText = "$ execute_start()";
+            busLines.forEach(line => line.classList.remove('processing-active'));
             alarmAudio.volume = 1.0;
-            alarmAudio.play().catch(e => console.log("Audio play blocked. Click anywhere first."));
-            document.body.classList.add('terminal-panic');
+            alarmAudio.play().catch(e => console.log("Audio play blocked.", e));
         }
 
         function stopAlarm() {
@@ -375,6 +493,12 @@
         }
 
         window.addEventListener('keydown', (e) => {
+            const modalActive = document.getElementById('customModal').classList.contains('active');
+            if (modalActive) {
+                if (e.code === 'Enter') { e.preventDefault(); confirmModal(); }
+                if (e.code === 'Escape') { e.preventDefault(); closeModal(); }
+                return;
+            }
             if (e.code === 'Space') { e.preventDefault(); toggleTimer(); }
         });
     </script>

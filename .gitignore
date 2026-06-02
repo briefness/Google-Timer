@@ -1,0 +1,11 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# Editor directories and files
+.vscode/*
+.idea
+.DS_Store
